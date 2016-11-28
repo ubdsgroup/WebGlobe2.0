@@ -3,6 +3,8 @@
  * The MIT License - http://www.opensource.org/licenses/mit-license
  */
 
+/* global WorldWind */
+
 /**
  * The LayerManager manages categorical, observable lists of Layer objects. It itself observable,
  * and it injects some observable properties into the individual Layer objects.
@@ -72,7 +74,7 @@ define(['knockout', 'model/Config', 'model/Constants', 'worldwind'],
             };
             
             // address of the webglobe server
-            this.webGlobeServer = 'http://128.205.11.115/';
+            this.webGlobeServer = 'http://199.109.195.187:8080/webGlobeServer/';
         };
 
         /**
@@ -356,9 +358,13 @@ define(['knockout', 'model/Config', 'model/Constants', 'worldwind'],
         LayerManager.prototype.addNetcdfDataset = function (netcdfDatasetAddress) {
             var self = this;
             
-            var netcdfDataset = self.loadNetcdfDatasetCapabilities(netcdfDatasetAddress);
+            self.loadNetcdfDatasetCapabilities(netcdfDatasetAddress);
             
-            self.netcdfDatasets.push(netcdfDataset);
+            //var netcdfDataset = self.loadNetcdfDatasetCapabilities(netcdfDatasetAddress);
+            
+            //self.netcdfDatasets.push(netcdfDataset);
+            
+            
         };
         
         LayerManager.nextServerId = 0;
@@ -404,17 +410,77 @@ define(['knockout', 'model/Config', 'model/Constants', 'worldwind'],
             //*****  FOR DINH -- THIS NEEDS TO BE CHANGED ****//
             //connect to the JSP server to get capabilities
             if (netcdfDatasetAddress  !== "") {
+                    var self = this;
+                    var netcdfDataset = null;
+                    
                     $.ajax({
-                        url: LayerManager.webGlobeServer+"Index",
+                        url: self.webGlobeServer + 'LoadNetcdfDataset',
                         cache: false,
                         type: 'POST',
                         contentType: 'application/json; charset=utf-8',
-                        data: ko.toJSON(Student),
-                        success: function (data) {
-                            // alert('added');
-                            self.Students.push(data);
-                            self.Name("");
-                            self.Age("");
+                        data: JSON.stringify({
+                            url: netcdfDatasetAddress
+                        }),
+                        success: function (dataJSON) {
+            
+                            // Determine the index of this layer within the WorldWindow
+                            var variableLayer = new WorldWind.RenderableLayer(dataJSON.variable.name + " varibale");
+
+                            var index = self.backgroundLayers().length + self.baseLayers().length + self.overlayLayers().length;
+
+                            LayerManager.applyOptionsToLayer(variableLayer, {enable: false}, constants.LAYER_CATEGORY_OVERLAY);
+
+                            self.globe.wwd.insertLayer(index, variableLayer);
+
+                            // Add a proxy for this layer to the list of overlays
+                            var variableLayerViewModel = LayerManager.createLayerViewModel(variableLayer);
+
+                            var variable = {
+                                    name: dataJSON.variable.name,
+                                    minDate: dataJSON.variable.minDate,
+                                    maxDate: dataJSON.variable.maxDate,
+                                    imageMinDate: dataJSON.variable.imageMinDate,
+                                    imageMaxDate: dataJSON.variable.imageMaxDate,
+                                    layer: variableLayer,
+                                    layerview: variableLayerViewModel,
+                                    address: dataJSON.variable.address,
+                                    imagesAddress: dataJSON.variable.imagesAddress,
+                                    images: ko.observableArray()
+                            };
+
+                            // Determine the index of this layer within the WorldWindow
+                            var analysisLayer = new WorldWind.RenderableLayer(dataJSON.analysis.name);
+
+                            LayerManager.applyOptionsToLayer(analysisLayer, {enable: false}, constants.LAYER_CATEGORY_OVERLAY);
+
+                            self.globe.wwd.insertLayer(index+1, analysisLayer);
+
+                            // Add a proxy for this layer to the list of overlays
+                            var analysisViewModel = LayerManager.createLayerViewModel(analysisLayer);
+
+                            var analysis = {
+                                    name: dataJSON.analysis.name,
+                                    minDate: dataJSON.analysis.minDate,
+                                    maxDate: dataJSON.analysis.maxDate,
+                                    imageMinDate: dataJSON.analysis.imageMinDate,
+                                    imageMaxDate: dataJSON.analysis.imageMaxDate,
+                                    layer: analysisLayer,
+                                    layerview: analysisViewModel,
+                                    address: dataJSON.analysis.address,
+                                    imagesAddress: dataJSON.analysis.imagesAddress,
+                                    images: ko.observableArray()
+                            };
+
+                            netcdfDataset = {
+                                    id: LayerManager.nextNetcdfDatasetId++,
+                                    address: netcdfDatasetAddress,
+                                    title: netcdfDatasetAddress,
+                                    layers: ko.observableArray(),
+                                    variable: variable,
+                                    analysis: analysis
+                                };
+                                
+                            self.netcdfDatasets.push(netcdfDataset);
                         }
                     }).fail(function (xhr, textStatus, err) {
                         alert(err);
@@ -423,14 +489,8 @@ define(['knockout', 'model/Config', 'model/Constants', 'worldwind'],
             else{
                     alert('No URL entered.');
                 }
-            var netcdfDataset = 
-                {
-                    id: LayerManager.nextNetcdfDatasetId++,
-                    address: netcdfDatasetAddress,
-                    title: netcdfDatasetAddress,
-                    layers: ko.observableArray()
-                };
-            return netcdfDataset;
+                
+            //return netcdfDataset;
         };
 
         /**
